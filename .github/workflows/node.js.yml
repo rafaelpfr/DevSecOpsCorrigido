@@ -1,0 +1,180 @@
+name: Node.js CI      
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+
+  tests_unit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2 
+      
+      - name: create env file
+        run: |
+          touch .env
+          echo APP_PRIVATE_KEY="${{ secrets.APP_PRIVATE_KEY }}" >> .env
+          echo MONGO_INITDB_USER="${{ secrets.MONGO_INITDB_USER }}" >> .env
+          echo MONGO_INITDB_PWD="${{ secrets.MONGO_INITDB_PWD }}" >> .env
+          
+      - name: Start containers
+        run: docker-compose -p projeto -f "docker-compose.yml" up -d
+      
+      - name: Run tests
+        run: docker container exec app npm test
+
+
+  sast-check_dependencies:
+    needs: tests_unit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - run: npm install
+
+      - name: Install and configure SNYK
+        run: sudo npm install -g snyk && snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: snyk scan for lib vulnerabilities (SAST)
+        run: sudo snyk test .
+
+
+  sast-njsscan:
+    needs: tests_unit
+    runs-on: ubuntu-latest
+
+    steps:    
+      - uses: actions/checkout@v2
+    
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'    
+
+      - name: njsscan (install dependencies)
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests_html njsscan
+          
+      - name: Execute njsscan
+        run: njsscan .
+      
+
+  dast-stackhawk:
+    needs: tests_unit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2 
+      
+      - name: create env file
+        run: |
+          touch .env
+          echo APP_PRIVATE_KEY="${{ secrets.APP_PRIVATE_KEY }}" >> .env
+          echo MONGO_INITDB_USER="${{ secrets.MONGO_INITDB_USER }}" >> .env
+          echo MONGO_INITDB_PWD="${{ secrets.MONGO_INITDB_PWD }}" >> .env
+                    
+      - name: Start containers
+        run: docker-compose -p projeto -f "docker-compose.yml" up -d
+        
+      - name: Scan my app
+        uses: stackhawk/hawkscan-action@v1.3.0
+        with:
+          apiKey: ${{ secrets.HAWK_API_KEY }}   
+          environmentVariables: HAWK_SCAN_USERNAME HAWK_APPLICATION_ID HAWK_SCAN_PASSWORD
+        env:
+          HAWK_SCAN_USERNAME: ${{ secrets.HAWK_SCAN_USERNAME }}
+          HAWK_APPLICATION_ID: ${{ secrets.HAWK_APPLICATION_ID }}
+          HAWK_SCAN_PASSWORD: ${{ secrets.HAWK_SCAN_PASSWORD }}
+
+        
+    
+  deploy-images:
+    needs: [tests_unit, sast-njsscan, dast-stackhawk, sast-check_dependencies]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Build and Push Docker Image
+      uses: mr-smithers-excellent/docker-build-push@v4
+      with:
+        image: rafa73/project_app
+        tag: latest
+        registry: docker.io
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+
+
+  deploy-production:
+    needs: [deploy-images]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2 
+
+    - name: Install oci-cli
+      uses: bytesbay/oci-cli-action@v1.0.2
+      with:
+        user: "${{ secrets.OCI_USER }}"
+        fingerprint: "${{ secrets.OCI_FINGERPRINT }}"
+        tenancy: "${{ secrets.OCI_TENANCY }}"
+        region: "${{ secrets.OCI_REGION }}"
+        api_key: |
+          ${{ secrets.OCI_API_KEY }}
+        verbose: true
+
+    - name: Get old vm
+      id: old_vm
+      run: echo ::set-output name=id::$(oci compute instance list -c ${{ secrets.OCI_TENANCY }} | jq -r '.data[-1]."id"')
+
+    - name: Terminate old vm
+      run: oci compute instance terminate --force --instance-id ${{ steps.old_vm.outputs.id }}
+
+    - name: Create new vm
+      id: new_vm
+      run: echo ::set-output name=id::$(oci compute instance launch --availability-domain ${{ secrets.OCI_AVAILABILITY_DOMAIN }} --compartment-id ${{ secrets.OCI_TENANCY }} --image-id ${{ secrets.OCI_IMAGE_ID }} --shape VM.Standard.E2.1.Micro --subnet-id ${{ secrets.OCI_SUBNET_ID }} --ssh-authorized-keys-file key.pub | jq -r '.data."id"')
+
+    - name: Sleep for 120 seconds
+      uses: jakejarvis/wait-action@master
+      with:
+        time: '120s'
+        
+    - name: Get public IP
+      id: ip
+      run: echo ::set-output name=public_ip::$(oci compute instance list-vnics --instance-id ${{ steps.new_vm.outputs.id }} | jq -r '.data[]."public-ip"')
+
+    - name: copy file via ssh password
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ steps.ip.outputs.public_ip }}
+        username: ${{ secrets.OCI_SSH_USERNAME }}
+        key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+        port: 22
+        source: "docker-compose-prod.yml"
+        target: "/home/${{ secrets.OCI_SSH_USERNAME }}"
+ 
+    - name: multiple command
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ steps.ip.outputs.public_ip }}
+        username: ${{ secrets.OCI_SSH_USERNAME }}
+        key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          export APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
+          export MONGO_INITDB_USER=${{ secrets.MONGO_INITDB_USER }}
+          export MONGO_INITDB_PWD=${{ secrets.MONGO_INITDB_PWD }}
+          sudo yum-config-manager --enable ol7_addons 
+          sudo yum install docker-engine -y
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          sudo curl -L "https://github.com/docker/compose/releases/download/1.23.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+          sudo -E bash -c 'docker-compose -f docker-compose-prod.yml up -d'
