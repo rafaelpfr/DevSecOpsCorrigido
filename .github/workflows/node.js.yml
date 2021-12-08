@@ -6,113 +6,113 @@ on:
 
 jobs:
 
-  tests_unit:
-    runs-on: ubuntu-latest
+#   tests_unit:
+#     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v2 
+#     steps:
+#       - uses: actions/checkout@v2 
       
-      - name: create env file
-        run: |
-          touch .env
-          echo APP_PRIVATE_KEY="${{ secrets.APP_PRIVATE_KEY }}" >> .env
-          echo MONGO_INITDB_USER="${{ secrets.MONGO_INITDB_USER }}" >> .env
-          echo MONGO_INITDB_PWD="${{ secrets.MONGO_INITDB_PWD }}" >> .env
+#       - name: create env file
+#         run: |
+#           touch .env
+#           echo APP_PRIVATE_KEY="${{ secrets.APP_PRIVATE_KEY }}" >> .env
+#           echo MONGO_INITDB_USER="${{ secrets.MONGO_INITDB_USER }}" >> .env
+#           echo MONGO_INITDB_PWD="${{ secrets.MONGO_INITDB_PWD }}" >> .env
           
-      - name: Start containers
-        run: docker-compose -p projeto -f "docker-compose.yml" up -d
+#       - name: Start containers
+#         run: docker-compose -p projeto -f "docker-compose.yml" up -d
       
-      - name: Run tests
-        run: docker container exec app npm test
+#       - name: Run tests
+#         run: docker container exec app npm test
 
 
-  sast-check_dependencies:
-    needs: tests_unit
-    runs-on: ubuntu-latest
+#   sast-check_dependencies:
+#     needs: tests_unit
+#     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '14'
-      - run: npm install
+#     steps:
+#       - uses: actions/checkout@v2
+#       - uses: actions/setup-node@v2
+#         with:
+#           node-version: '14'
+#       - run: npm install
 
-      - name: Install and configure SNYK
-        run: sudo npm install -g snyk && snyk auth ${{ secrets.SNYK_TOKEN }}
+#       - name: Install and configure SNYK
+#         run: sudo npm install -g snyk && snyk auth ${{ secrets.SNYK_TOKEN }}
 
-      - name: snyk scan for lib vulnerabilities (SAST)
-        run: sudo snyk test .
+#       - name: snyk scan for lib vulnerabilities (SAST)
+#         run: sudo snyk test .
 
 
-  sast-njsscan:
-    needs: tests_unit
-    runs-on: ubuntu-latest
+#   sast-njsscan:
+#     needs: tests_unit
+#     runs-on: ubuntu-latest
 
-    steps:    
-      - uses: actions/checkout@v2
+#     steps:    
+#       - uses: actions/checkout@v2
     
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'    
+#       - uses: actions/setup-python@v2
+#         with:
+#           python-version: '3.x'    
 
-      - name: njsscan (install dependencies)
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests_html njsscan
+#       - name: njsscan (install dependencies)
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install requests_html njsscan
           
-      - name: Execute njsscan
-        run: njsscan .
+#       - name: Execute njsscan
+#         run: njsscan .
       
 
-  dast-stackhawk:
-    needs: tests_unit
-    runs-on: ubuntu-latest
+#   dast-stackhawk:
+#     needs: tests_unit
+#     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v2 
+#     steps:
+#       - uses: actions/checkout@v2 
       
-      - name: create env file
-        run: |
-          touch .env
-          echo APP_PRIVATE_KEY="${{ secrets.APP_PRIVATE_KEY }}" >> .env
-          echo MONGO_INITDB_USER="${{ secrets.MONGO_INITDB_USER }}" >> .env
-          echo MONGO_INITDB_PWD="${{ secrets.MONGO_INITDB_PWD }}" >> .env
+#       - name: create env file
+#         run: |
+#           touch .env
+#           echo APP_PRIVATE_KEY="${{ secrets.APP_PRIVATE_KEY }}" >> .env
+#           echo MONGO_INITDB_USER="${{ secrets.MONGO_INITDB_USER }}" >> .env
+#           echo MONGO_INITDB_PWD="${{ secrets.MONGO_INITDB_PWD }}" >> .env
                     
-      - name: Start containers
-        run: docker-compose -p projeto -f "docker-compose.yml" up -d
+#       - name: Start containers
+#         run: docker-compose -p projeto -f "docker-compose.yml" up -d
         
-      - name: Scan my app
-        uses: stackhawk/hawkscan-action@v1.3.0
-        with:
-          apiKey: ${{ secrets.HAWK_API_KEY }}   
-          environmentVariables: HAWK_SCAN_USERNAME HAWK_APPLICATION_ID HAWK_SCAN_PASSWORD
-        env:
-          HAWK_SCAN_USERNAME: ${{ secrets.HAWK_SCAN_USERNAME }}
-          HAWK_APPLICATION_ID: ${{ secrets.HAWK_APPLICATION_ID }}
-          HAWK_SCAN_PASSWORD: ${{ secrets.HAWK_SCAN_PASSWORD }}
+#       - name: Scan my app
+#         uses: stackhawk/hawkscan-action@v1.3.0
+#         with:
+#           apiKey: ${{ secrets.HAWK_API_KEY }}   
+#           environmentVariables: HAWK_SCAN_USERNAME HAWK_APPLICATION_ID HAWK_SCAN_PASSWORD
+#         env:
+#           HAWK_SCAN_USERNAME: ${{ secrets.HAWK_SCAN_USERNAME }}
+#           HAWK_APPLICATION_ID: ${{ secrets.HAWK_APPLICATION_ID }}
+#           HAWK_SCAN_PASSWORD: ${{ secrets.HAWK_SCAN_PASSWORD }}
 
         
     
-  deploy-images:
-    needs: [tests_unit, sast-njsscan, dast-stackhawk, sast-check_dependencies]
-    runs-on: ubuntu-latest
+#   deploy-images:
+#     needs: [tests_unit, sast-njsscan, dast-stackhawk, sast-check_dependencies]
+#     runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v2
+#     steps:
+#     - uses: actions/checkout@v2
 
-    - name: Build and Push Docker Image
-      uses: mr-smithers-excellent/docker-build-push@v4
-      with:
-        image: rafa73/project_app
-        tag: latest
-        registry: docker.io
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+#     - name: Build and Push Docker Image
+#       uses: mr-smithers-excellent/docker-build-push@v4
+#       with:
+#         image: rafa73/project_app
+#         tag: latest
+#         registry: docker.io
+#         username: ${{ secrets.DOCKER_USERNAME }}
+#         password: ${{ secrets.DOCKER_PASSWORD }}
 
 
 
   deploy-production:
-    needs: [deploy-images]
+#     needs: [deploy-images]
     runs-on: ubuntu-latest
 
     steps:
@@ -129,12 +129,12 @@ jobs:
           ${{ secrets.OCI_API_KEY }}
         verbose: true
 
-    - name: Get old vm
-      id: old_vm
-      run: echo ::set-output name=id::$(oci compute instance list -c ${{ secrets.OCI_TENANCY }} | jq -r '.data[-1]."id"')
+#     - name: Get old vm
+#       id: old_vm
+#       run: echo ::set-output name=id::$(oci compute instance list -c ${{ secrets.OCI_TENANCY }} | jq -r '.data[-1]."id"')
 
-    - name: Terminate old vm
-      run: oci compute instance terminate --force --instance-id ${{ steps.old_vm.outputs.id }}
+#     - name: Terminate old vm
+#       run: oci compute instance terminate --force --instance-id ${{ steps.old_vm.outputs.id }}
 
     - name: Create new vm
       id: new_vm
