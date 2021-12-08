@@ -1,0 +1,28 @@
+version: "2"
+services:
+  
+  mongo:
+    container_name: mongo
+    image: rafa73/project_mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=vulnerable
+      - MONGO_INITDB_USER=$MONGO_INITDB_USER
+      - MONGO_INITDB_PWD=$MONGO_INITDB_PWD
+
+  mongo-seed:
+    depends_on:
+      - mongo
+    image: rafa73/project_mongo-seed
+
+  app:
+    container_name: app
+    restart: always
+    image: rafa73/project_app
+    ports:
+      - "3000:3000"
+    environment:
+      - APP_PRIVATE_KEY=$APP_PRIVATE_KEY
+      - MONGO_INITDB_USER=$MONGO_INITDB_USER
+      - MONGO_INITDB_PWD=$MONGO_INITDB_PWD

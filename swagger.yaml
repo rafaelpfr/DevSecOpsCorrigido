@@ -1,0 +1,47 @@
+swagger: "2.0"
+info:
+  title: Sample Example Web API
+  description: Web API description in _markdown_.
+  version: 1.0.0
+host: localhost:3000
+basePath: /
+schemes:
+  - http
+paths:
+  /login:
+    post:
+      summary: Login Page.
+      description: This is the page where admins can login to show speakers and audience registered.
+      parameters:
+        - in: query
+          name: redirect_url
+          type: string
+          required: false
+          description: Parameter that indicates to where redirect user after a successful login.
+      produces:
+        - application/json
+      responses:
+        200:
+          description: User logged
+        301:
+          description: User redirect
+
+  /participants:
+    get:
+      summary: Show audience.
+      description: This is the page where admins can check participants registered.
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Show participants list
+
+  /speakers:
+    get:
+      summary: Show speakers.
+      description: This is the page where admins can check audience registered.
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Show speakers list

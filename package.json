@@ -1,0 +1,21 @@
+{
+  "name": "nodejs-open-redirect",
+  "version": "1.0.0",
+  "description": "Vulnerable App",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/.bin/jest"
+  },
+  "author": "Me",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "helmet": "^4.6.0",
+    "jsonwebtoken": "8.5.1",
+    "mongo-sanitize": "^1.1.0",
+    "mongoose": "^6.0.5"
+  },
+  "devDependencies": {
+    "jest": "^27.2.0"
+  }
+}

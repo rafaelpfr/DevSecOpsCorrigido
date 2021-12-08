@@ -1,0 +1,12 @@
+[
+    {
+      "name": "Speaker1",
+      "email": "speaker1@gmail.com",
+      "password": "speaker2Senha"
+    },
+    {
+      "name": "Speaker2",
+      "email": "speaker2@gmail.com",
+      "password": "speaker2Senha"
+    }
+  ]
