@@ -1,5 +1,5 @@
 const express = require('express');
-const app = express();
+const app = express(); 
  
 require('./models/participant.js');
 require('./models/admin');
